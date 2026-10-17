@@ -1,156 +1,186 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Vernier Calliper</title>
-
-<style>
-*{box-sizing:border-box}
-[hidden]{display:none!important}
-:root{
-  color-scheme:dark;
-  --bg:#0a0c0f;--panel:#12161b;--line:#262d36;
-  --text:#e9ecef;--muted:#99a3ae;--steel:#c4ccd4;--accent:#8db4dc
-}
-body{
-  margin:0;padding:12px;background:var(--bg);color:var(--text);
-  font:15px/1.5 system-ui,-apple-system,"Segoe UI",Roboto,Arial,sans-serif
-}
-.app{max-width:1000px;margin:auto}
-header{text-align:center;margin:10px 0 18px}
-h1{
-  margin:0;font:italic 600 clamp(28px,5vw,42px) Georgia,"Times New Roman",serif;
-  letter-spacing:1px;color:#e2e6ea
-}
-.rule{width:60px;height:1px;background:#6b7580;margin:12px auto 0}
-.stage{
-  position:relative;overflow:hidden;border:1px solid var(--line);
-  border-radius:10px;background:#07080a
-}
-#viewer{width:100%;height:clamp(260px,50vw,440px);touch-action:none}
-#viewer canvas{display:block;width:100%;height:100%}
-.view-tools{position:absolute;right:10px;bottom:10px;display:flex;gap:8px}
-.view-tools button{background:rgba(18,22,27,.88);min-height:34px;padding:6px 12px;font-size:12px}
-.panel{
-  margin-top:14px;padding:16px;background:var(--panel);
-  border:1px solid var(--line);border-radius:10px
-}
-h2{font-size:17px;margin:0 0 10px}
-.note{color:var(--muted);font-size:13px;line-height:1.6;margin:0 0 12px}
-.slider-row{display:flex;align-items:center;gap:10px;font-size:12px;color:#ccd2d8}
-#jawSlider{flex:1;min-width:0;accent-color:var(--steel);height:28px}
-#jawValue{min-width:38px;text-align:right}
-button{
-  padding:10px 14px;min-height:40px;border:1px solid #3a424c;border-radius:7px;
-  background:#1d232a;color:var(--text);font:inherit;font-size:13px;cursor:pointer
-}
-button:hover{background:#2a323b}
-button:focus-visible,input:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
-.shapes{display:flex;flex-wrap:wrap;gap:8px}
-.shapes button.active{background:#2c3a49;border-color:var(--accent);color:#fff}
-.fields{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px;margin-top:14px}
-label{display:block;font-size:12px;color:#ccd2d8;margin-bottom:6px}
-input[type=number]{
-  width:100%;min-width:0;padding:10px;background:#090b0e;color:var(--text);
-  border:1px solid #3a424c;border-radius:7px;font:inherit
-}
-.result{
-  margin-top:14px;padding:12px 14px;border:1px solid var(--line);
-  border-radius:8px;background:#0c0f13
-}
-.result b{display:block;font-size:12px;color:var(--muted);font-weight:normal;margin-bottom:4px}
-#measurementAnswer{font-size:18px;font-weight:bold}
-#removeButton{margin-top:14px}
-#status{font-size:12px;line-height:1.5;color:#b4bcc5;margin-top:12px}
-.formula{font-size:14px;line-height:1.9;color:#dde1e5}
-.debug{
-  margin-top:14px;padding:12px;background:#000;color:#9fd;border:1px solid var(--line);
-  border-radius:8px;font-size:11px;white-space:pre-wrap;word-break:break-word
-}
-@media(max-width:600px){
-  .panel{padding:13px}
-  .fields{grid-template-columns:1fr}
-}
-@media(prefers-reduced-motion:reduce){*{transition:none!important}}
-</style>
-
-<script type="importmap">
-{
-  "imports":{
-    "three":"https://cdn.jsdelivr.net/npm/three@0.184.0/build/three.module.js",
-    "three/addons/":"https://cdn.jsdelivr.net/npm/three@0.184.0/examples/jsm/"
-  }
-}
-</script>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <meta name="theme-color" content="#050608">
+  <title>Vernier Caliper</title>
+  <style>
+    :root {
+      color-scheme: dark;
+      --bg: #050608;
+      --panel: #11151c;
+      --panel2: #171d26;
+      --line: #293240;
+      --text: #f2f5f9;
+      --muted: #aab5c4;
+      --blue: #4d9eff;
+      --cyan: #6de3ff;
+      --green: #59d6a1;
+      --red: #ff8585;
+    }
+    * { box-sizing: border-box; }
+    html, body { margin: 0; min-height: 100%; background: var(--bg); color: var(--text); font-family: Inter, system-ui, -apple-system, "Segoe UI", Arial, sans-serif; }
+    body { padding: 0 0 24px; }
+    .app { width: min(100%, 980px); margin: 0 auto; padding: 16px 12px 28px; }
+    header { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 4px 2px 14px; }
+    .brand { font-size: clamp(20px, 5vw, 27px); font-weight: 800; letter-spacing: .08em; }
+    .subbrand { color: var(--muted); font-size: 12px; margin-top: 4px; }
+    .status-pill { flex: 0 0 auto; border: 1px solid var(--line); border-radius: 999px; padding: 7px 10px; font-size: 11px; color: var(--muted); }
+    .viewer-card { overflow: hidden; border: 1px solid #222a35; border-radius: 18px; background: #000; box-shadow: 0 12px 36px #0008; }
+    #viewer { width: 100%; height: clamp(310px, 53vh, 510px); position: relative; background: #000; touch-action: pan-y; }
+    #viewer canvas { display: block; width: 100%; height: 100%; outline: none; }
+    .viewer-topline { position: absolute; z-index: 2; inset: 10px 10px auto; display: flex; justify-content: space-between; align-items: flex-start; gap: 8px; pointer-events: none; }
+    .viewer-tag { background: #080b10d9; border: 1px solid #ffffff20; border-radius: 9px; padding: 7px 9px; font-size: 11px; color: #d7e1ed; }
+    #calibrationTip { display: none; position: absolute; z-index: 3; left: 10px; right: 10px; bottom: 10px; padding: 10px 12px; border: 1px solid #4d9eff88; border-radius: 12px; background: #101c2bee; color: #f2f7ff; font-size: 13px; line-height: 1.4; pointer-events: none; }
+    .viewer-bottom { display: flex; gap: 8px; justify-content: space-between; flex-wrap: wrap; padding: 10px 12px; border-top: 1px solid #202630; background: #0d1015; color: var(--muted); font-size: 11px; }
+    .layout { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-top: 12px; }
+    .card { min-width: 0; border: 1px solid var(--line); border-radius: 16px; background: var(--panel); padding: 15px; }
+    .card h2 { font-size: 15px; letter-spacing: .01em; margin: 0 0 12px; }
+    .card p { font-size: 12px; line-height: 1.55; margin: 7px 0; color: var(--muted); }
+    .full { grid-column: 1 / -1; }
+    button, select, input { font: inherit; }
+    button { color: var(--text); border: 1px solid #354153; background: var(--panel2); border-radius: 10px; min-height: 42px; padding: 9px 12px; cursor: pointer; }
+    button:active { transform: translateY(1px); }
+    button.primary { background: #1b5daa; border-color: #3986e7; font-weight: 700; }
+    button.secondary { background: #16263a; border-color: #2e5077; }
+    button.danger { background: #2b171b; border-color: #60313a; }
+    button:disabled, input:disabled, select:disabled { opacity: .42; cursor: not-allowed; }
+    .row { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+    .row > button { flex: 1 1 auto; }
+    .field { min-width: 0; }
+    .field label { display: block; font-size: 12px; color: var(--muted); margin: 0 0 6px; }
+    input, select { width: 100%; min-height: 42px; color: var(--text); background: #090c11; border: 1px solid #344050; border-radius: 10px; padding: 9px 10px; }
+    .dimensions { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; margin: 12px 0; }
+    .slider-row { display: grid; grid-template-columns: 1fr auto; gap: 8px; align-items: center; margin: 12px 0; }
+    input[type="range"] { min-height: 30px; padding: 0; accent-color: var(--blue); border: 0; background: transparent; }
+    #jawValue { color: var(--cyan); font-variant-numeric: tabular-nums; font-weight: 700; min-width: 68px; text-align: right; }
+    .status { min-height: 38px; border: 1px solid #283242; border-radius: 10px; padding: 9px 10px; margin-top: 10px; color: var(--muted); font-size: 12px; line-height: 1.4; background: #0a0d12; }
+    .status.good { color: var(--green); border-color: #255342; }
+    .status.bad { color: var(--red); border-color: #63333b; }
+    .result { margin-top: 10px; padding: 12px; border: 1px solid #234b6c; border-radius: 12px; background: #0b1a27; }
+    .result-label { color: #a9c8e6; font-size: 11px; text-transform: uppercase; letter-spacing: .1em; }
+    #measurementAnswer { font-size: 20px; font-weight: 800; margin-top: 5px; font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
+    .formula { color: #dce6f1 !important; font-size: 13px !important; padding: 10px; background: #090c11; border: 1px solid #232b36; border-radius: 10px; }
+    .small-note { font-size: 11px !important; color: #92a0b1 !important; }
+    @media (max-width: 690px) {
+      .app { padding: 10px 9px 22px; }
+      header { padding-bottom: 10px; }
+      .layout { grid-template-columns: 1fr; gap: 10px; margin-top: 10px; }
+      .full { grid-column: auto; }
+      #viewer { height: clamp(300px, 45vh, 410px); }
+      .card { padding: 13px; }
+      .status-pill { font-size: 10px; padding: 6px 8px; }
+    }
+  </style>
+  <script type="importmap">
+    {
+      "imports": {
+        "three": "https://cdn.jsdelivr.net/npm/three@0.184.0/build/three.module.js",
+        "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.184.0/examples/jsm/"
+      }
+    }
+  </script>
 </head>
-
 <body>
-<main class="app">
-  <header>
-    <h1>Vernier Calliper</h1>
-    <div class="rule"></div>
-  </header>
-
-  <div class="stage">
-    <div id="viewer"></div>
-    <div class="view-tools">
-      <button id="fitButton">Full view</button>
-      <button id="jawsButton">Zoom on jaws</button>
-    </div>
-  </div>
-
-  <section class="panel" id="jawControlPanel">
-    <h2>Jaw Opening</h2>
-    <p class="note">Slide to open or close the jaws. Pinch to zoom, drag with one finger to move around.</p>
-    <div class="slider-row">
-      <span>Closed</span>
-      <input id="jawSlider" type="range" min="0" max="100" value="0" aria-label="Jaw opening">
-      <span>Open</span>
-      <span id="jawValue">0%</span>
-    </div>
-  </section>
-
-  <section class="panel">
-    <h2>Measure an Object</h2>
-    <p class="note">Choose a shape and enter its size in millimetres. The jaws close on it exactly.</p>
-
-    <div class="shapes">
-      <button data-shape="sphere">Sphere</button>
-      <button data-shape="cube">Cube</button>
-      <button data-shape="cylinder">Cylinder</button>
-      <button data-shape="cuboid">Cuboid</button>
-      <button data-shape="cone">Cone</button>
-    </div>
-
-    <div id="objectPanel" hidden>
-      <div class="fields">
-        <div id="fieldA"><label id="labelA" for="dimA">Diameter (mm)</label>
-          <input id="dimA" type="number" min="1" max="100" step="any" value="20" inputmode="decimal"></div>
-        <div id="fieldB"><label id="labelB" for="dimB">Height (mm)</label>
-          <input id="dimB" type="number" min="1" max="100" step="any" value="20" inputmode="decimal"></div>
-        <div id="fieldC"><label id="labelC" for="dimC">Height (mm)</label>
-          <input id="dimC" type="number" min="1" max="100" step="any" value="20" inputmode="decimal"></div>
+  <main class="app">
+    <header>
+      <div>
+        <div class="brand">VERNIER CALIPER</div>
+        <div class="subbrand">Interactive 3D instrument</div>
       </div>
-      <div class="result">
-        <b>Object in the jaws</b>
-        <div id="measurementAnswer"></div>
+      <div class="status-pill" id="modelBadge">LOADING MODEL</div>
+    </header>
+
+    <section class="viewer-card" aria-label="3D Vernier caliper viewer">
+      <div id="viewer">
+        <div class="viewer-topline">
+          <div class="viewer-tag">3D VIEW</div>
+          <div class="viewer-tag" id="viewStatus">Preparing instrument…</div>
+        </div>
+        <div id="calibrationTip"></div>
       </div>
-      <button id="removeButton">Remove Object</button>
+      <div class="viewer-bottom">
+        <span>Drag to rotate · Pinch to zoom</span>
+        <span id="modelSizeText">Model scale: not calibrated</span>
+      </div>
+    </section>
+
+    <div class="layout">
+      <section class="card full">
+        <h2>1. Jaw setup</h2>
+        <p>Calibrate once by tapping the inside tip of each jaw on the model. This avoids guessing 3D coordinates. Rotate the model first if either tip is hard to see.</p>
+        <div class="row">
+          <button class="primary" id="calibrateButton" disabled>Calibrate jaw tips</button>
+          <button id="cancelCalibrationButton" disabled>Cancel setup</button>
+        </div>
+        <div id="jawControlPanel" style="margin-top:12px;">
+          <label for="jawSlider" style="display:block;font-size:12px;color:var(--muted);margin-bottom:5px;">Jaw opening</label>
+          <div class="slider-row">
+            <input id="jawSlider" type="range" min="0" max="100" value="35" disabled>
+            <span id="jawValue">— mm</span>
+          </div>
+          <div class="row">
+            <button id="closeJawsButton" disabled>Close jaws</button>
+            <button id="openJawsButton" disabled>Open jaws</button>
+          </div>
+        </div>
+        <div class="status" id="status" role="status">Loading the 3D model…</div>
+      </section>
+
+      <section class="card">
+        <h2>2. Add an object</h2>
+        <div class="field">
+          <label for="shapeSelect">Object shape</label>
+          <select id="shapeSelect">
+            <option value="sphere">Sphere</option>
+            <option value="cube">Cube</option>
+            <option value="cylinder">Cylinder</option>
+            <option value="cone">Cone</option>
+            <option value="cuboid">Cuboid</option>
+          </select>
+        </div>
+        <div class="dimensions">
+          <div class="field" id="fieldA">
+            <label id="labelA" for="dimensionA">Diameter (mm)</label>
+            <input id="dimensionA" type="number" min="1" max="100" step="0.5" value="10" inputmode="decimal">
+          </div>
+          <div class="field" id="fieldB">
+            <label id="labelB" for="dimensionB">Width (mm)</label>
+            <input id="dimensionB" type="number" min="1" max="100" step="0.5" value="10" inputmode="decimal">
+          </div>
+          <div class="field" id="fieldC">
+            <label id="labelC" for="dimensionC">Height (mm)</label>
+            <input id="dimensionC" type="number" min="1" max="100" step="0.5" value="10" inputmode="decimal">
+          </div>
+        </div>
+        <div class="row">
+          <button class="primary" id="addObjectButton" disabled>Add object between jaws</button>
+          <button id="updateButton" disabled>Update size</button>
+        </div>
+        <div class="row" style="margin-top:8px;">
+          <button class="danger" id="removeButton" disabled>Remove object</button>
+          <button id="resetButton" disabled>Reset</button>
+        </div>
+      </section>
+
+      <section class="card">
+        <h2>3. Object details</h2>
+        <p id="selectedObjectName">No object selected</p>
+        <div class="result">
+          <div class="result-label">Object dimensions</div>
+          <div id="measurementAnswer">—</div>
+        </div>
+        <p class="small-note">The object and jaw opening update together when you apply a new size. Keep the first dimension within the available jaw opening.</p>
+      </section>
+
+      <section class="card full">
+        <h2>Vernier formula</h2>
+        <p class="formula">Final reading = Main scale reading + (Coinciding vernier division × Least count)</p>
+        <p class="small-note">The 3D object placement is linked to the calibrated jaw tips. The formula is a learning reference; a true independent scale reading requires calibration of the printed scale and least count.</p>
+      </section>
     </div>
-
-    <div id="status" role="status">Loading model...</div>
-  </section>
-
-  <section class="panel">
-    <h2>Vernier Calliper Formula</h2>
-    <div class="formula">
-      <strong>Reading = Main Scale Reading + Vernier Scale Reading</strong><br>
-      Vernier Scale Reading = Coinciding Division × Least Count
-    </div>
-  </section>
-</main>
-
-<script type="module" src="./script.js?v=16"></script>
+  </main>
+  <script type="module" src="./script.js?v=1"></script>
 </body>
 </html>
