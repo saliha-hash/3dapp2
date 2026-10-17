@@ -3,12 +3,17 @@ import { OrbitControls } from "three/addons/controls/OrbitControls.js";
 import { GLTFLoader } from "three/addons/loaders/GLTFLoader.js";
 import { RoomEnvironment } from "three/addons/environments/RoomEnvironment.js";
 
-/* ===== Calibration: the only values you may need to edit ===== */
+/* ===== Calibration, measured from verniercaliper.glb (model units) ===== */
 const MODEL = "./verniercaliper.glb";
-const BEAM_MM = 300;                    // real length of the whole caliper in mm
-const SLIDER = "cube004_2";             // GLB part that carries the moving jaw (lower-case)
-const HIDE = ["circle_4", "object_12"]; // GLB parts to hide (lower-case)
-const MAX_MM = 100;                     // largest object size accepted
+const MM_PER_UNIT = 31.27;  // from the vernier photo: 1 model unit = 31.27 mm
+const ZERO_X = -1.1227;     // x of the vernier zero line when the jaws are closed
+const FACE_X = -1.521;      // inner face of both jaws when closed (fixed jaw face)
+const FACE_Z = 0.366;       // z where the fixed and moving jaw blades overlap
+const ROOT_Y = -0.17;       // just below the beam, where both jaw faces start
+const TRAVEL = 3.47;        // how far the moving jaw can slide (units)
+const RULER_PX_PER_MM = 2.903; // ruler texture: 35 px = zero, 2.903 px per mm
+const MOVING = ["cube004_2", "cylinder_3"];   // slider body and thumb knob
+const HIDE = ["circle_4", "cylinder001_5"];   // stray parts (the black circle)
 
 const $ = id => document.getElementById(id);
 const say = t => ($("status").textContent = t, null);
@@ -49,25 +54,31 @@ controls.touches = { ONE: THREE.TOUCH.PAN, TWO: THREE.TOUCH.DOLLY_PAN };
 let moved = false;
 controls.addEventListener("start", () => (moved = true));
 
-/* ===== Helpers ===== */
+/* ===== Load the caliper ===== */
+let rig, slider, ready = false, W = 6, H = 2.5;
 const v3 = new THREE.Vector3();
-const box = o => new THREE.Box3().setFromObject(o);
-const inside = (o, root) => { for (; o; o = o.parent) if (o === root) return true; return false; };
-const shownMesh = m => { for (let o = m; o; o = o.parent) if (!o.visible) return false; return true; };
-function eachVertex(list, fn) {
-  for (const m of list) {
-    const p = m.geometry.attributes.position;
-    for (let i = 0; i < p.count; i++) fn(v3.fromBufferAttribute(p, i).applyMatrix4(m.matrixWorld), m);
-  }
-}
-
-/* ===== Load the caliper and measure the jaws from its real geometry ===== */
-let rig, slider, ready = false;
-const G = {}; // measured facts, all in model units
 
 new GLTFLoader().load(MODEL, gltf => {
   try { setup(gltf.scene); } catch (e) { console.error(e); say("Setup problem: " + e.message); }
 }, undefined, e => { console.error(e); say("Model failed to load. Check the file name verniercaliper.glb."); });
+
+/* The model's ruler is a stock 30 cm image. Re-map it so its zero sits at the vernier zero
+   and its millimetres match the vernier scale, so the reading equals the jaw opening. */
+function fixRuler(mesh) {
+  mesh.updateWorldMatrix(true, false);
+  const mw = mesh.matrixWorld, inv = mw.clone().invert();
+  const p = mesh.geometry.attributes.position, uv = mesh.geometry.attributes.uv;
+  for (let i = 0; i < p.count; i++) {
+    v3.fromBufferAttribute(p, i).applyMatrix4(mw);
+    v3.x = Math.max(v3.x, ZERO_X);
+    uv.setX(i, (35 + RULER_PX_PER_MM * MM_PER_UNIT * (v3.x - ZERO_X)) / 1024);
+    v3.applyMatrix4(inv);
+    p.setXYZ(i, v3.x, v3.y, v3.z);
+  }
+  p.needsUpdate = uv.needsUpdate = true;
+  mesh.geometry.computeBoundingBox();
+  mesh.geometry.computeBoundingSphere();
+}
 
 function setup(model) {
   rig = new THREE.Group();
@@ -75,89 +86,34 @@ function setup(model) {
   scene.add(rig);
   rig.updateMatrixWorld(true);
 
-  const meshes = [];
-  let seed = null;
+  const parts = [];
   model.traverse(o => {
     const n = o.name.toLowerCase();
-    if (o.isMesh) meshes.push(o);
-    if (!seed && n === SLIDER) seed = o;
     if (HIDE.includes(n)) o.visible = false;
+    if (MOVING.includes(n)) parts.push(o);
   });
-  if (!seed) throw new Error(`part "${SLIDER}" not found (open the page with ?debug)`);
-  const shown = () => meshes.filter(shownMesh);
+  if (parts.length < MOVING.length) throw new Error("moving jaw parts not found in the model");
+  const ruler = model.getObjectByName("Object_4");
+  if (ruler) fixRuler(ruler);
 
-  const all = new THREE.Box3();
-  shown().forEach(m => all.union(box(m)));
-  const L = all.max.x - all.min.x, H = all.max.y - all.min.y;
-
-  /* Beam bottom (yb) and jaw tips (yt). */
-  let yb = Infinity, yt = Infinity;
-  eachVertex(shown(), p => {
-    yt = Math.min(yt, p.y);
-    if (p.x > all.min.x + 0.75 * L) yb = Math.min(yb, p.y);
-  });
-
-  /* Hide any stray flat round disc hanging below the beam (the black circle). */
-  const hidden = [], size = new THREE.Vector3(), cen = new THREE.Vector3();
-  for (const m of shown()) {
-    if (inside(m, seed)) continue;
-    const b = box(m);
-    b.getSize(size); b.getCenter(cen);
-    const d = Math.max(size.x, size.y), r = size.x / size.y;
-    if (size.z < 0.5 * Math.min(size.x, size.y) && d > 0.035 * L && d < 0.15 * L &&
-        r > 0.6 && r < 1.67 && cen.y < yb - 0.05 * H) { m.visible = false; hidden.push(m.name); }
-  }
-
-  /* Moving assembly = the jaw part plus every small part riding inside its length (knob, screws). */
   slider = new THREE.Group();
   rig.add(slider);
-  const sb = box(seed), tol = 0.15 * (sb.max.x - sb.min.x), parts = [seed];
-  for (const m of shown()) {
-    if (inside(m, seed)) continue;
-    const b = box(m);
-    if (b.min.x > sb.min.x - tol && b.max.x < sb.max.x + tol) parts.push(m);
-  }
   parts.forEach(o => slider.attach(o));
-  rig.updateMatrixWorld(true);
 
-  /* Inner measuring faces, read from the lower jaw region only. */
-  const y0 = yt + 0.15 * (yb - yt), y1 = yt + 0.6 * (yb - yt);
-  let xf = -Infinity, xs = Infinity, zl = Infinity, zh = -Infinity, beamEnd = -Infinity, slEnd = -Infinity;
-  eachVertex(shown(), (p, m) => {
-    const mine = inside(m, slider);
-    if (mine) slEnd = Math.max(slEnd, p.x); else beamEnd = Math.max(beamEnd, p.x);
-    if (p.y < y0 || p.y > y1) return;
-    if (mine) xs = Math.min(xs, p.x);
-    else if (p.x < all.min.x + 0.5 * L) { xf = Math.max(xf, p.x); zl = Math.min(zl, p.z); zh = Math.max(zh, p.z); }
-  });
-  if (!isFinite(xf) || !isFinite(xs)) throw new Error("jaw faces not found (open the page with ?debug)");
-
-  /* Place the whole instrument centred and scaled to the viewer. */
   const fit = new THREE.Box3();
-  shown().forEach(m => fit.union(box(m)));
-  const S = 6.5 / L, fs = fit.getSize(new THREE.Vector3());
-  rig.scale.setScalar(S);
-  rig.position.copy(fit.getCenter(new THREE.Vector3())).multiplyScalar(-S);
-  rig.updateMatrixWorld(true);
-
-  Object.assign(G, {
-    S, L, H, xf, y0, y1, yb, zc: (zl + zh) / 2, g0: xs - xf, mmu: BEAM_MM / L,
-    tMax: Math.max(0.1 * L, beamEnd - slEnd - 0.01 * L), W: fs.x * S, Hs: fs.y * S, D: fs.z * S
+  model.traverse(o => {
+    if (!o.isMesh) return;
+    for (let p = o; p; p = p.parent) if (!p.visible) return;
+    fit.union(new THREE.Box3().setFromObject(o));
   });
+  const size = fit.getSize(new THREE.Vector3());
+  W = size.x; H = size.y;
+  rig.position.copy(fit.getCenter(new THREE.Vector3())).negate();
+  rig.updateMatrixWorld(true);
 
   ready = true;
   viewFull(true);
   say("Caliper ready. Zoom in on the jaws, or add an object to measure.");
-
-  if (new URLSearchParams(location.search).has("debug")) {
-    const pre = document.createElement("pre");
-    pre.className = "debug";
-    pre.textContent = JSON.stringify({
-      meshes: meshes.map(m => m.name), hidden, moving: parts.map(p => p.name),
-      G: Object.fromEntries(Object.entries(G).map(([k, x]) => [k, +x.toFixed(4)]))
-    }, null, 1);
-    document.body.append(pre);
-  }
 }
 
 /* ===== Camera ===== */
@@ -169,14 +125,13 @@ function go(pos, tgt, instant) {
   else fly = { t0: performance.now(), p0: camera.position.clone(), q0: controls.target.clone(), p1: pos, q1: tgt };
 }
 function viewFull(instant) {
-  go(new THREE.Vector3(0, 0, dist(Math.max(G.W / camera.aspect, G.Hs) * 1.15) + G.D / 2), new THREE.Vector3(), instant);
+  go(new THREE.Vector3(0, 0, dist(Math.max(W / camera.aspect, H) * 1.15) + 1), new THREE.Vector3(), instant);
 }
 function viewJaws() {
   if (!ready) return;
-  const gap = G.g0 + slider.position.x;
-  const c = new THREE.Vector3(G.xf + gap / 2, (G.y0 + G.y1) / 2, G.zc).multiplyScalar(G.S).add(rig.position);
-  const span = Math.max(G.Hs * 0.75, ((gap + 0.2 * G.L) * G.S) / camera.aspect);
-  go(new THREE.Vector3(c.x, c.y, c.z + dist(span)), c);
+  const gap = slider.position.x;
+  const c = rig.localToWorld(new THREE.Vector3(FACE_X + gap / 2, -0.55, FACE_Z));
+  go(new THREE.Vector3(c.x, c.y, c.z + dist(Math.max(2.2, (gap + 1.4) / camera.aspect))), c);
 }
 $("fitButton").onclick = () => ready && viewFull();
 $("jawsButton").onclick = viewJaws;
@@ -185,24 +140,25 @@ $("jawsButton").onclick = viewJaws;
 $("jawSlider").addEventListener("input", () => {
   const val = Number($("jawSlider").value);
   $("jawValue").textContent = val + "%";
-  if (ready && !obj) slider.position.x = (val / 100) * G.tMax;
+  if (ready && !obj) slider.position.x = (val / 100) * TRAVEL;
 });
 
-/* ===== Objects: jaws always close exactly on the first size ===== */
+/* ===== Objects: the jaws always close exactly on the first size ===== */
 const SHAPES = {
-  sphere:   { f: ["Diameter"],                geo: a => new THREE.SphereGeometry(a / 2, 64, 40),               up: a => a },
-  cube:     { f: ["Side"],                    geo: a => new THREE.BoxGeometry(a, a, a),                       up: a => a },
-  cylinder: { f: ["Diameter", "Height"],      geo: (a, b) => new THREE.CylinderGeometry(a / 2, a / 2, b, 64), up: (a, b) => b },
-  cuboid:   { f: ["Length", "Width", "Height"], geo: (a, b, c) => new THREE.BoxGeometry(a, c, b),             up: (a, b, c) => c },
-  cone:     { f: ["Base diameter", "Height"], geo: (a, b) => new THREE.ConeGeometry(a / 2, b, 64),           up: (a, b) => b }
+  sphere:   { f: ["Diameter"],                  max: 60, geo: a => new THREE.SphereGeometry(a / 2, 64, 40),               h: a => a },
+  cube:     { f: ["Side"],                      max: 100, geo: a => new THREE.BoxGeometry(a, a, a),                       h: a => a },
+  cylinder: { f: ["Diameter", "Height"],        max: 100, geo: (a, b) => new THREE.CylinderGeometry(a / 2, a / 2, b, 64), h: (a, b) => b },
+  cuboid:   { f: ["Length", "Width", "Height"], max: 100, geo: (a, b, c) => new THREE.BoxGeometry(a, c, b),               h: (a, b, c) => c },
+  cone:     { f: ["Base diameter", "Height"],   max: 100, geo: (a, b) => new THREE.ConeGeometry(a / 2, b, 64),            h: (a, b) => b }
 };
 let shape = null, obj = null;
 
 function readDims() {
-  const d = SHAPES[shape].f.map((_, i) => parseFloat($("dim" + "ABC"[i]).value));
-  const maxMM = Math.min(MAX_MM, (G.tMax + G.g0) * G.mmu);
-  if (d.some(x => !(x >= 1 && x <= MAX_MM))) return say(`Enter sizes between 1 and ${MAX_MM} mm.`);
-  if (d[0] > maxMM) return say(`The jaws open to ${Math.floor(maxMM)} mm at most. Reduce the first size.`);
+  const sh = SHAPES[shape];
+  const d = sh.f.map((_, i) => parseFloat($("dim" + "ABC"[i]).value));
+  const limit = Math.min(sh.max, Math.floor(TRAVEL * MM_PER_UNIT));
+  if (d.some(x => !(x >= 1 && x <= sh.max))) return say(`Enter sizes between 1 and ${sh.max} mm.`);
+  if (d[0] > limit) return say(`The jaws open to ${limit} mm at most. Reduce the first size.`);
   return d;
 }
 
@@ -210,14 +166,16 @@ function place() {
   if (!obj) return;
   const d = readDims();
   if (!d) return;
-  const sh = SHAPES[shape], u = 1 / G.mmu, v = d.map(x => x * u);
+  const sh = SHAPES[shape], u = 1 / MM_PER_UNIT, v = d.map(x => x * u);
   obj.geometry.dispose();
   obj.geometry = sh.geo(...v);
-  slider.position.x = v[0] - G.g0;            // jaw faces exactly one object-size apart
-  const h = sh.up(...v);
-  let y = shape === "cone" ? G.y0 + h / 2 : (G.y0 + G.y1) / 2;
-  y = Math.min(y, G.yb - h / 2 - 0.004 * G.L); // never poke into the beam
-  obj.position.set(G.xf + v[0] / 2, y, G.zc);  // touching the fixed jaw face
+  slider.position.x = v[0];                   // jaw faces are exactly one object-size apart
+  const h = sh.h(...v);
+  let top = shape === "cone" ? ROOT_Y - 0.05 : ROOT_Y;   // cone hangs point-down from its base
+  let y = top - h / 2;
+  if (shape === "sphere") y = Math.max(y, -1.05);       // keep the widest part inside the jaw faces
+  obj.rotation.z = shape === "cone" ? Math.PI : 0;
+  obj.position.set(FACE_X + v[0] / 2, y, FACE_Z);       // touching the fixed jaw face
   $("measurementAnswer").textContent = sh.f.map((n, i) => `${n}: ${d[i]} mm`).join(",  ");
   say(`Object is held between the jaws. Measured size: ${d[0]} mm.`);
 }
@@ -245,8 +203,8 @@ function removeObject() {
   document.querySelectorAll("[data-shape]").forEach(b => b.classList.remove("active"));
   $("objectPanel").hidden = true;
   $("jawControlPanel").hidden = false;
-  slider.position.x = Math.min(G.tMax, Math.max(0, slider.position.x));
-  const pct = Math.round((slider.position.x / G.tMax) * 100);
+  slider.position.x = Math.min(TRAVEL, Math.max(0, slider.position.x));
+  const pct = Math.round((slider.position.x / TRAVEL) * 100);
   $("jawSlider").value = pct;
   $("jawValue").textContent = pct + "%";
   say("Object removed. Move the jaws freely.");
