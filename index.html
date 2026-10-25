@@ -1,0 +1,836 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#080b10">
+  <meta name="description" content="An interactive 3D Vernier caliper lab for learning scale readings, least count, and zero error.">
+  <title>Vernier Caliper — Precision Measurement Lab</title>
+
+  <style>
+    :root {
+      color-scheme: dark;
+      --bg: #080b10;
+      --panel: #111720;
+      --panel-2: #0c1118;
+      --line: #2c3744;
+      --line-strong: #465362;
+      --text: #eef3f8;
+      --muted: #a8b4c2;
+      --steel: #d4dee8;
+      --accent: #8cc8ff;
+      --accent-2: #e05a66;
+      --good: #8de0bd;
+      --radius: 16px;
+    }
+
+    * { box-sizing: border-box; }
+    [hidden] { display: none !important; }
+    html { scroll-behavior: smooth; }
+
+    body {
+      margin: 0;
+      padding: max(12px, env(safe-area-inset-top)) 12px max(22px, env(safe-area-inset-bottom));
+      color: var(--text);
+      background:
+        radial-gradient(ellipse at 50% -12%, rgba(56, 90, 126, .20), transparent 48%),
+        var(--bg);
+      font: 15px/1.55 Inter, ui-sans-serif, system-ui, -apple-system,
+        "Segoe UI", Roboto, Arial, sans-serif;
+    }
+
+    button, input { font: inherit; }
+    button { color: inherit; }
+    .app { width: min(1080px, 100%); margin: 0 auto; }
+
+    .masthead {
+      padding: 10px 4px 20px;
+      text-align: center;
+    }
+
+    .eyebrow {
+      margin: 0 0 6px;
+      color: var(--accent);
+      font-size: 11px;
+      font-weight: 750;
+      letter-spacing: .19em;
+      text-transform: uppercase;
+    }
+
+    h1 {
+      margin: 0;
+      font-size: clamp(25px, 5vw, 43px);
+      line-height: 1.15;
+      font-weight: 720;
+      letter-spacing: -.035em;
+    }
+
+    .subtitle {
+      max-width: 630px;
+      margin: 10px auto 0;
+      color: var(--muted);
+      font-size: 14px;
+    }
+
+    .divider {
+      width: 92px;
+      height: 2px;
+      margin: 18px auto 0;
+      background: linear-gradient(90deg, transparent, #9dafc0, transparent);
+    }
+
+    .stage {
+      position: relative;
+      overflow: hidden;
+      border: 1px solid var(--line-strong);
+      border-radius: 18px;
+      background: #030507;
+      box-shadow: 0 20px 55px #0006, inset 0 1px #ffffff09;
+    }
+
+    #viewer {
+      width: 100%;
+      height: clamp(300px, 64vw, 520px);
+      touch-action: none;
+    }
+
+    #viewer canvas {
+      display: block;
+      width: 100%;
+      height: 100%;
+    }
+
+    .stage-topline {
+      position: absolute;
+      top: 12px;
+      left: 14px;
+      z-index: 2;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      color: #aab6c3;
+      font-size: 11px;
+      letter-spacing: .07em;
+      text-transform: uppercase;
+      pointer-events: none;
+    }
+
+    .live-dot {
+      width: 7px;
+      height: 7px;
+      border-radius: 50%;
+      background: var(--good);
+      box-shadow: 0 0 12px #8de0bd88;
+    }
+
+    .view-tools {
+      position: absolute;
+      right: 12px;
+      bottom: 12px;
+      z-index: 4;
+      display: flex;
+      flex-wrap: wrap;
+      justify-content: flex-end;
+      gap: 8px;
+    }
+
+    .btn {
+      min-height: 42px;
+      padding: 9px 14px;
+      border: 1px solid var(--line-strong);
+      border-radius: 10px;
+      background: #151c25ed;
+      color: var(--text);
+      font-size: 13px;
+      font-weight: 650;
+      cursor: pointer;
+      transition: border-color .15s ease, background .15s ease, transform .15s ease;
+    }
+
+    .btn:hover {
+      border-color: #93a5b7;
+      background: #202b38;
+    }
+
+    .btn:active { transform: translateY(1px); }
+
+    .btn:focus-visible,
+    input:focus-visible {
+      outline: 2px solid var(--accent);
+      outline-offset: 3px;
+    }
+
+    .btn.primary {
+      border-color: #628eb5;
+      background: #1c3b55;
+    }
+
+    .btn.primary:hover { background: #254d6e; }
+
+    .inset {
+      position: absolute;
+      z-index: 3;
+      top: 48px;
+      right: 12px;
+      width: min(390px, calc(100% - 24px));
+      padding: 12px;
+      border: 1px solid #566574;
+      border-radius: 13px;
+      background: #0a0e14f5;
+      box-shadow: 0 12px 36px #000a;
+      backdrop-filter: blur(10px);
+    }
+
+    .inset-head {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+      margin-bottom: 6px;
+    }
+
+    .inset-title {
+      font-size: 12px;
+      font-weight: 750;
+      letter-spacing: .03em;
+    }
+
+    .close-inset {
+      min-width: 30px;
+      min-height: 30px;
+      padding: 2px 8px;
+    }
+
+    #scaleCanvas {
+      display: block;
+      width: 100%;
+      height: 150px;
+      border-radius: 8px;
+      background: #e8edf2;
+    }
+
+    .inset-caption {
+      margin: 7px 0 0;
+      color: var(--muted);
+      font-size: 11px;
+      line-height: 1.45;
+    }
+
+    .panel {
+      margin-top: 14px;
+      padding: clamp(14px, 3.5vw, 22px);
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      background: linear-gradient(145deg, #141b25, #0e131b);
+      box-shadow: inset 0 1px #ffffff07;
+    }
+
+    .panel-heading {
+      display: flex;
+      align-items: start;
+      justify-content: space-between;
+      gap: 14px;
+      margin-bottom: 8px;
+    }
+
+    h2 {
+      margin: 0;
+      font-size: 19px;
+      line-height: 1.3;
+      font-weight: 720;
+      letter-spacing: -.02em;
+    }
+
+    h3 {
+      margin: 0 0 8px;
+      font-size: 13px;
+      font-weight: 750;
+    }
+
+    .subtext {
+      margin: 6px 0 15px;
+      color: var(--muted);
+      font-size: 13px;
+      line-height: 1.6;
+    }
+
+    .tag {
+      flex: 0 0 auto;
+      padding: 4px 8px;
+      border: 1px solid #3a4a59;
+      border-radius: 999px;
+      color: #c2d1df;
+      font-size: 10px;
+      font-weight: 750;
+      letter-spacing: .06em;
+      text-transform: uppercase;
+    }
+
+    .control-row {
+      display: grid;
+      grid-template-columns: minmax(0,1fr) auto;
+      align-items: center;
+      gap: 14px;
+    }
+
+    .range-wrap { min-width: 0; }
+
+    .range-labels {
+      display: flex;
+      justify-content: space-between;
+      gap: 8px;
+      color: var(--muted);
+      font-size: 11px;
+    }
+
+    input[type="range"] {
+      display: block;
+      width: 100%;
+      min-width: 0;
+      margin: 9px 0 4px;
+      accent-color: var(--accent);
+      cursor: pointer;
+    }
+
+    output.readout {
+      min-width: 92px;
+      padding: 9px 11px;
+      border: 1px solid #3a4a59;
+      border-radius: 10px;
+      background: #080d13;
+      color: var(--text);
+      text-align: center;
+      font-size: 14px;
+      font-weight: 760;
+      font-variant-numeric: tabular-nums;
+    }
+
+    .shape-grid {
+      display: grid;
+      grid-template-columns: repeat(4, minmax(0,1fr));
+      gap: 8px;
+    }
+
+    .shape-btn {
+      min-height: 45px;
+      padding: 8px 10px;
+      border: 1px solid #3b4654;
+      border-radius: 11px;
+      background: #171f29;
+      text-align: center;
+      font-size: 13px;
+      font-weight: 650;
+      cursor: pointer;
+    }
+
+    .shape-btn:hover {
+      background: #212d3b;
+      border-color: #758597;
+    }
+
+    .shape-btn.active {
+      border-color: #9acfff;
+      background: #244361;
+      box-shadow: inset 0 0 0 1px #9acfff40;
+    }
+
+    .fields {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0,1fr));
+      gap: 12px;
+      margin-top: 15px;
+    }
+
+    label {
+      display: block;
+      margin-bottom: 6px;
+      color: #c7d1dc;
+      font-size: 12px;
+      font-weight: 650;
+    }
+
+    input[type="number"] {
+      width: 100%;
+      min-width: 0;
+      padding: 11px 12px;
+      border: 1px solid #3d4b5a;
+      border-radius: 10px;
+      background: #080c12;
+      color: var(--text);
+      font-variant-numeric: tabular-nums;
+    }
+
+    input[type="number"]:focus { border-color: var(--accent); }
+    input:disabled { opacity: .55; cursor: not-allowed; }
+
+    .object-actions {
+      display: flex;
+      align-items: center;
+      flex-wrap: wrap;
+      gap: 8px;
+      margin-top: 13px;
+    }
+
+    .result-summary {
+      margin-top: 14px;
+      padding: 13px 14px;
+      border: 1px solid #31485b;
+      border-radius: 12px;
+      background: linear-gradient(120deg, #0c1a26, #0a1018);
+    }
+
+    .result-label {
+      margin-bottom: 2px;
+      color: #a8c7e1;
+      font-size: 11px;
+      font-weight: 750;
+      letter-spacing: .08em;
+      text-transform: uppercase;
+    }
+
+    .result-value {
+      color: white;
+      font-size: clamp(24px, 6vw, 34px);
+      line-height: 1.2;
+      font-weight: 780;
+      font-variant-numeric: tabular-nums;
+      letter-spacing: -.025em;
+    }
+
+    .result-detail {
+      margin-top: 5px;
+      color: #b2c0cd;
+      font-size: 12px;
+    }
+
+    .calc-grid {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0,1fr));
+      gap: 9px;
+      margin-top: 13px;
+    }
+
+    .calc-item {
+      padding: 11px 12px;
+      border: 1px solid #2d3946;
+      border-radius: 10px;
+      background: #0a1017;
+    }
+
+    .calc-item span {
+      display: block;
+      color: var(--muted);
+      font-size: 11px;
+    }
+
+    .calc-item strong {
+      display: block;
+      margin-top: 3px;
+      color: var(--text);
+      font-size: 15px;
+      font-weight: 730;
+      font-variant-numeric: tabular-nums;
+    }
+
+    .zero-layout {
+      display: grid;
+      grid-template-columns: minmax(0,1fr) auto;
+      gap: 14px;
+      align-items: center;
+    }
+
+    .zero-value {
+      min-width: 112px;
+      text-align: right;
+    }
+
+    .zero-value strong {
+      display: block;
+      font-size: 19px;
+      font-variant-numeric: tabular-nums;
+    }
+
+    .zero-value span {
+      color: var(--muted);
+      font-size: 10px;
+    }
+
+    .formula {
+      margin-top: 10px;
+      padding: 14px;
+      border: 1px solid #2d3b49;
+      border-radius: 12px;
+      background: #090e15;
+    }
+
+    .formula-main {
+      font-size: 14px;
+      font-weight: 750;
+      line-height: 1.7;
+    }
+
+    .formula-sub {
+      margin-top: 6px;
+      color: var(--muted);
+      font-size: 12px;
+      line-height: 1.65;
+    }
+
+    .callout {
+      margin-top: 12px;
+      padding: 11px 12px;
+      border-left: 3px solid #d3ad68;
+      border-radius: 0 9px 9px 0;
+      background: #241e14;
+      color: #ead7b3;
+      font-size: 12px;
+      line-height: 1.6;
+    }
+
+    #status {
+      margin-top: 13px;
+      color: #bdc9d5;
+      font-size: 12px;
+      line-height: 1.55;
+    }
+
+    #status[data-kind="error"] { color: #ffb5b5; }
+
+    .footer {
+      padding: 22px 8px 4px;
+      color: #8593a2;
+      text-align: center;
+      font-size: 11px;
+      line-height: 1.75;
+    }
+
+    .footer a {
+      color: #bdcddd;
+      text-underline-offset: 3px;
+    }
+
+    .footer a:hover { color: white; }
+
+    @media (min-width: 840px) {
+      .work-grid {
+        display: grid;
+        grid-template-columns: minmax(0,1.1fr) minmax(0,.9fr);
+        gap: 14px;
+        align-items: start;
+      }
+
+      .work-grid .panel { margin-top: 14px; }
+      .work-grid .span-all { grid-column: 1 / -1; }
+    }
+
+    @media (max-width: 560px) {
+      body { padding-right: 8px; padding-left: 8px; }
+      .masthead { padding-bottom: 15px; }
+      #viewer { height: 340px; }
+      .view-tools { right: 8px; bottom: 8px; gap: 6px; }
+      .btn { min-height: 39px; padding: 8px 10px; font-size: 12px; }
+      .shape-grid { grid-template-columns: repeat(3, minmax(0,1fr)); }
+      .fields { grid-template-columns: 1fr; gap: 10px; }
+      .panel { border-radius: 13px; }
+      .control-row { grid-template-columns: minmax(0,1fr) auto; gap: 8px; }
+      output.readout { min-width: 80px; padding: 8px 7px; font-size: 12px; }
+      .calc-grid { grid-template-columns: 1fr 1fr; }
+      .stage-topline { top: 9px; left: 10px; font-size: 9px; }
+      .inset { top: 36px; right: 8px; width: calc(100% - 16px); }
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+      *, *::before, *::after {
+        scroll-behavior: auto !important;
+        transition: none !important;
+      }
+    }
+  </style>
+
+  <script type="importmap">
+    {
+      "imports": {
+        "three": "https://cdn.jsdelivr.net/npm/three@0.184.0/build/three.module.js",
+        "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.184.0/examples/jsm/"
+      }
+    }
+  </script>
+</head>
+
+<body>
+  <main class="app">
+    <header class="masthead">
+      <p class="eyebrow">Interactive physics laboratory</p>
+      <h1>Vernier Caliper</h1>
+      <p class="subtitle">
+        Explore precision measurement with a 3D instrument, movable jaws,
+        object dimensions, and a live scale-reading breakdown.
+      </p>
+      <div class="divider"></div>
+    </header>
+
+    <section class="stage" aria-label="Three-dimensional Vernier caliper viewer">
+      <div class="stage-topline">
+        <span class="live-dot"></span>
+        <span id="stageStatus">Loading 3D instrument</span>
+      </div>
+
+      <div id="viewer"
+           aria-label="Interactive 3D Vernier caliper. Drag to rotate, pinch to zoom.">
+      </div>
+
+      <div class="inset" id="scaleInset" hidden>
+        <div class="inset-head">
+          <span class="inset-title">Scale coincidence · schematic zoom</span>
+          <button type="button" class="btn close-inset"
+                  id="closeInsetButton" aria-label="Close scale inset">✕</button>
+        </div>
+
+        <canvas id="scaleCanvas" width="760" height="300"
+                aria-label="Magnified schematic of main and Vernier scale marks">
+        </canvas>
+
+        <p class="inset-caption">
+          The red marker identifies the simulated coinciding division.
+          This inset illustrates the reading calculation; the original
+          3D model's engraved marks are a separate texture.
+        </p>
+      </div>
+
+      <div class="view-tools">
+        <button class="btn" id="fitButton" type="button">Full view</button>
+        <button class="btn" id="jawsButton" type="button">Zoom on jaws + scale</button>
+        <button class="btn" id="fullscreenButton" type="button">Fullscreen</button>
+      </div>
+    </section>
+
+    <div class="work-grid">
+      <section class="panel">
+        <div class="panel-heading">
+          <h2>1. Set the jaw opening</h2>
+          <span class="tag">Manual mode</span>
+        </div>
+
+        <p class="subtext">
+          Use the slider to move the movable jaw when no object is selected.
+          Choose an object below to set the gap from its first dimension instead.
+        </p>
+
+        <div class="control-row">
+          <div class="range-wrap">
+            <div class="range-labels">
+              <span>Closed · 0 mm</span>
+              <span>Maximum · 100 mm</span>
+            </div>
+            <input id="jawSlider" type="range" min="0" max="100"
+                   value="0" step="0.05"
+                   aria-label="Manual jaw opening in millimetres">
+          </div>
+          <output class="readout" id="jawValue">0.00 mm</output>
+        </div>
+
+        <div class="object-actions">
+          <button class="btn" id="closeJawsButton" type="button">Close jaws</button>
+          <button class="btn" id="removeButton" type="button" disabled>Remove object</button>
+        </div>
+
+        <div id="status" role="status" aria-live="polite">
+          Loading model and calibrating the scale…
+        </div>
+      </section>
+
+      <section class="panel">
+        <div class="panel-heading">
+          <h2>2. Choose an object</h2>
+          <span class="tag">mm units</span>
+        </div>
+
+        <p class="subtext">
+          The first dimension sets the measured span between the jaws.
+          Dimensions must be between 1 and 100 mm to stay within this model's reliable travel.
+        </p>
+
+        <div class="shape-grid" id="shapeButtons">
+          <button class="shape-btn" type="button" data-shape="sphere">Sphere</button>
+          <button class="shape-btn" type="button" data-shape="cube">Cube</button>
+          <button class="shape-btn" type="button" data-shape="cylinder">Cylinder</button>
+          <button class="shape-btn" type="button" data-shape="cuboid">Cuboid</button>
+          <button class="shape-btn" type="button" data-shape="cone">Cone</button>
+          <button class="shape-btn" type="button" data-shape="slab">Slab</button>
+          <button class="shape-btn" type="button" data-shape="wire">Wire</button>
+        </div>
+
+        <div id="objectPanel" hidden>
+          <div class="fields">
+            <div id="fieldA">
+              <label id="labelA" for="dimA">Diameter (mm)</label>
+              <input id="dimA" type="number" min="1" max="100"
+                     step="0.05" value="20" inputmode="decimal">
+            </div>
+
+            <div id="fieldB">
+              <label id="labelB" for="dimB">Height (mm)</label>
+              <input id="dimB" type="number" min="1" max="100"
+                     step="any" value="20" inputmode="decimal">
+            </div>
+
+            <div id="fieldC">
+              <label id="labelC" for="dimC">Depth (mm)</label>
+              <input id="dimC" type="number" min="1" max="100"
+                     step="any" value="20" inputmode="decimal">
+            </div>
+          </div>
+
+          <div class="result-summary">
+            <div class="result-label">Zero-corrected reading</div>
+            <div class="result-value" id="measurementAnswer">20.00 mm</div>
+            <div class="result-detail" id="objectDimensionsSummary">
+              Object dimension: 20.00 mm
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section class="panel">
+        <div class="panel-heading">
+          <h2>3. Live reading calculation</h2>
+          <span class="tag">Least count 0.05 mm</span>
+        </div>
+
+        <p class="subtext">
+          The simulated scale reading is rounded to the nearest least-count step.
+          The zero correction is then applied to the observed reading.
+        </p>
+
+        <div class="calc-grid">
+          <div class="calc-item">
+            <span>Main Scale Reading (MSR)</span>
+            <strong id="msrValue">0 mm</strong>
+          </div>
+
+          <div class="calc-item">
+            <span>Coinciding Vernier division (VC)</span>
+            <strong id="vcValue">0</strong>
+          </div>
+
+          <div class="calc-item">
+            <span>Vernier contribution = VC × LC</span>
+            <strong id="vernierContribution">0.00 mm</strong>
+          </div>
+
+          <div class="calc-item">
+            <span>Observed reading = MSR + VC × LC</span>
+            <strong id="observedValue">0.00 mm</strong>
+          </div>
+
+          <div class="calc-item">
+            <span>Zero error</span>
+            <strong id="zeroErrorCalc">0.00 mm</strong>
+          </div>
+
+          <div class="calc-item">
+            <span>Zero correction = − zero error</span>
+            <strong id="zeroCorrection">−0.00 mm</strong>
+          </div>
+        </div>
+
+        <div class="result-summary">
+          <div class="result-label">Final corrected measurement</div>
+          <div class="result-value" id="finalReading">0.00 mm</div>
+          <div class="result-detail" id="roundingNote">
+            Select an object to calculate a reading.
+          </div>
+        </div>
+      </section>
+
+      <section class="panel">
+        <div class="panel-heading">
+          <h2>4. Zero-error adjustment</h2>
+          <span class="tag">−1 to +1 mm</span>
+        </div>
+
+        <p class="subtext">
+          Set a simulated instrument zero error. Positive error is subtracted;
+          negative error is added through the zero correction.
+        </p>
+
+        <div class="zero-layout">
+          <div class="range-wrap">
+            <div class="range-labels">
+              <span>−1.00 mm</span>
+              <span>0.00 mm</span>
+              <span>+1.00 mm</span>
+            </div>
+
+            <input id="zeroSlider" type="range" min="-1" max="1"
+                   step="0.05" value="0"
+                   aria-label="Zero error in millimetres">
+          </div>
+
+          <div class="zero-value">
+            <strong id="zeroValue">0.00 mm</strong>
+            <span>simulated zero error</span>
+          </div>
+        </div>
+
+        <div class="object-actions">
+          <button class="btn" id="zeroResetButton" type="button">
+            Reset zero error
+          </button>
+        </div>
+      </section>
+
+      <section class="panel span-all">
+        <div class="panel-heading">
+          <h2>How the Vernier scale works</h2>
+          <span class="tag">Physics notes</span>
+        </div>
+
+        <div class="formula">
+          <div class="formula-main">
+            Least count = 1 main-scale division − 1 Vernier-scale division
+          </div>
+
+          <div class="formula-sub">
+            In this simulation: 1 MSD = 1 mm and 20 VSD = 19 mm,
+            so 1 VSD = 0.95 mm and LC = 1.00 − 0.95 = 0.05 mm.
+          </div>
+
+          <div class="formula-main" style="margin-top:8px">
+            Final reading = MSR + (VC × LC) − zero error
+          </div>
+
+          <div class="formula-sub">
+            VC is the index (0–19) of the coinciding Vernier division.
+            If zero error is negative, subtracting it adds the magnitude of the error.
+          </div>
+        </div>
+
+        <div class="callout">
+          <strong>Important calibration note:</strong>
+          “10 Vernier divisions = 9 mm” gives a least count of 0.10 mm
+          when 1 MSD = 1 mm—not 0.05 mm. To teach 0.05 mm correctly,
+          this lab uses 20 Vernier divisions = 19 mm in the calculation
+          and in the inset schematic. The uploaded GLB's engraved Vernier
+          markings are part of its original texture and may not visually
+          match this pedagogical inset exactly.
+        </div>
+      </section>
+    </div>
+
+    <footer class="footer">
+      3D model adapted from
+      <a href="https://sketchfab.com/3d-models/verniercaliper-205ebdec7304449bb8d2effbfe272ec8"
+         target="_blank" rel="noopener noreferrer">VernierCaliper by kg007</a>.
+      Scale texture/material enhancements are applied at runtime.
+      Model licensed under
+      <a href="https://creativecommons.org/licenses/by/4.0/"
+         target="_blank" rel="noopener noreferrer">CC BY 4.0</a>.<br>
+      Three.js is loaded from jsDelivr; keep <code>index.html</code>,
+      <code>script.js</code>, and <code>verniercaliper.glb</code> together when publishing.
+    </footer>
+  </main>
+
+  <script type="module" src="./script.js"></script>
+</body>
+  </html>
